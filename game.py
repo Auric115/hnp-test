@@ -9,12 +9,14 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-CONFIG_FILE = Path(".hnp_config")
-GLOBAL_STATE_FILE = Path("hnp_global.json")
-DEFAULT_DEV_TIME = 300  # seconds (5 minutes)
+CONFIG_FILE = Path("state/.hnp_config")
+GLOBAL_STATE_FILE = Path("state/hnp_global.json")
+DEFAULT_DEV_TIME = 300
 FLAG_FORMAT = "HNP{"
 
-# -------------------- UTILS --------------------
+BUILD_SCRIPT = [sys.executable, "utils/build.py"]
+RUN_SCRIPT = [sys.executable, "utils/run.py"]
+
 def now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -28,30 +30,27 @@ def write_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
-def docker_image_exists(image_name):
-    """Check if a docker image exists locally"""
-    result = subprocess.run(
-        ["docker", "images", "-q", image_name],
-        capture_output=True,
-        text=True,
-    )
-    return bool(result.stdout.strip())
-
 def build_docker_image():
-    print("[BUILD] Docker image 'hnp-service' not found locally. Building now...")
-    result = subprocess.run(["./utils/build.sh"])
+    print("[BUILD] Checking/building Docker image...")
+    result = subprocess.run(BUILD_SCRIPT)
     if result.returncode != 0:
         print("[ERROR] Failed to build Docker image. Aborting.")
         sys.exit(1)
-    print("[BUILD] Docker image built successfully.")
 
-def run_service():
-    if not docker_image_exists("hnp-service"):
-        build_docker_image()
+def start_service():
     print("[RUN] Starting service...")
-    subprocess.run(["./utils/run.sh"])
+    result = subprocess.run(RUN_SCRIPT + ["--start"])
+    if result.returncode != 0:
+        print("[ERROR] Failed to start service.")
+        sys.exit(1)
 
-# -------------------- CONFIG INIT --------------------
+def stop_service():
+    print("[RUN] Stopping service...")
+    result = subprocess.run(RUN_SCRIPT + ["--stop"])
+    if result.returncode != 0:
+        print("[ERROR] Failed to stop service.")
+        sys.exit(1)
+
 def init_config():
     if CONFIG_FILE.exists():
         print("[INFO] .hnp_config already exists.")
@@ -67,7 +66,6 @@ def init_config():
     write_json(CONFIG_FILE, data)
     print(f"[INIT] Welcome, {username}! .hnp_config created.")
 
-    # Initialize or update global file
     global_data = read_json(GLOBAL_STATE_FILE)
     if "players" not in global_data:
         global_data["players"] = {}
@@ -81,21 +79,26 @@ def init_config():
         write_json(GLOBAL_STATE_FILE, global_data)
         print("[INIT] Global player state initialized.")
 
-# -------------------- HACK START --------------------
+def setup_only():
+    if CONFIG_FILE.exists():
+        print("[INFO] .hnp_config already exists.")
+        return
+    init_config()
+
 def start_challenge(test_mode=False):
     if test_mode:
-        print("[TEST] Running in test mode. Starting service without saving state.")
-        run_service()
+        print("[TEST] Running service without saving state.")
+        start_service()
         return
 
-    run_service()
+    build_docker_image()
+    start_service()
 
     config = read_json(CONFIG_FILE)
     config["hack_start"] = now()
     write_json(CONFIG_FILE, config)
     print("[START] Hack time started at", config["hack_start"])
 
-# -------------------- SUBMIT FLAG --------------------
 def submit_flag(submitted_flag):
     config = read_json(CONFIG_FILE)
     global_data = read_json(GLOBAL_STATE_FILE)
@@ -119,7 +122,6 @@ def submit_flag(submitted_flag):
 
     print(f"[INFO] Hack duration: {hack_time} seconds")
 
-    # Find opponent (the other user who last pushed)
     opponent = None
     for user in global_data.get("players", {}):
         if user != username:
@@ -130,13 +132,11 @@ def submit_flag(submitted_flag):
         print("[ERROR] No opponent found in global state.")
         return
 
-    # Assume success for now
     global_data["players"][opponent]["dev_time"] = global_data["players"][opponent].get("dev_time", 0) + hack_time
     write_json(GLOBAL_STATE_FILE, global_data)
     print(f"[SUCCESS] Flag accepted. {opponent}'s dev time increased by {hack_time}s.")
     print(f"[NEXT] Run: python game.py --patch")
 
-# -------------------- PATCH BRANCH --------------------
 def patch():
     config = read_json(CONFIG_FILE)
     username = config.get("username")
@@ -156,7 +156,6 @@ def patch():
     write_json(CONFIG_FILE, config)
     print(f"[PATCH] Branch {branch_name} created and dev timer started.")
 
-# -------------------- END PATCH --------------------
 def end_patch(new_flag):
     config = read_json(CONFIG_FILE)
     global_data = read_json(GLOBAL_STATE_FILE)
@@ -190,7 +189,6 @@ def end_patch(new_flag):
     subprocess.run(["git", "merge", config["current_branch"]])
     subprocess.run(["git", "push", "origin", "main"])
 
-    # Update global state
     global_data["players"][username]["last_flag"] = new_flag
     global_data["players"][username]["dev_time"] = 0
     global_data["players"][username]["last_round"] = now()
@@ -198,7 +196,6 @@ def end_patch(new_flag):
 
     print(f"[PUSHED] Changes merged to main with new flag: {new_flag}")
 
-# -------------------- MAIN ENTRY --------------------
 def main():
     parser = argparse.ArgumentParser(description="Hack and Patch Game")
     parser.add_argument("--start", action="store_true", help="Start the challenge")
@@ -206,10 +203,14 @@ def main():
     parser.add_argument("--patch", action="store_true", help="Begin patching")
     parser.add_argument("--end", type=str, help="End patch and provide new flag")
     parser.add_argument("--test", action="store_true", help="Run service in test mode")
+    parser.add_argument("--stop", action="store_true", help="Stop the running service")
+    parser.add_argument("--setup", action="store_true", help="Initialize user without starting")
 
     args = parser.parse_args()
 
-    if args.test:
+    if args.setup:
+        setup_only()
+    elif args.test:
         start_challenge(test_mode=True)
     elif args.start:
         init_config()
@@ -220,6 +221,8 @@ def main():
         patch()
     elif args.end:
         end_patch(args.end)
+    elif args.stop:
+        stop_service()
     else:
         parser.print_help()
 

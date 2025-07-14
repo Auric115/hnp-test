@@ -3,8 +3,8 @@
 
 # if files need to be ignores, add them to the gitignore
 
-# Local user/game state
-.hnp_config
+# local user game state
+state/.hnp_config
 
 # Python artifacts
 __pycache__/
