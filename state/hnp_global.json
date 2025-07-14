@@ -1,9 +1,14 @@
 {
   "players": {
     "BJ": {
-      "dev_time": 0,
+      "dev_time": 25,
       "last_flag": "",
       "last_round": "2025-07-14T16:37:38.361067+00:00"
+    },
+    "Bad_Guy": {
+      "dev_time": 0,
+      "last_flag": "HNP{default_flag2}",
+      "last_round": "2025-07-14T16:41:00.544933+00:00"
     }
   }
 }
