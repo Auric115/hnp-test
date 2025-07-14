@@ -119,6 +119,7 @@ def submit_flag(submitted_flag):
     hack_time = int((end - start).total_seconds())
 
     print(f"[INFO] Hack duration: {hack_time} seconds")
+    stop_service()
 
     opponent = None
     for user in global_data.get("players", {}):

@@ -56,5 +56,3 @@ python game.py
 * **No Hacking the Infrastructure** – `game.py` must not be altered without mutual agreement. `.gitignore` should only ever be appended to, never trimmed.
 * **Black Box Hacking** – You must not inspect the source code while hacking. You may only interact with the running service (usually via `localhost:8000`).
     - After hacking however, you have unlimited time to inspect the source code. Your time starts when you run --patch to make your first change. Do not prepare a file and copy paste it or things of that nature to try to circumvent the system. This is not permitted.
-
-```

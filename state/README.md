@@ -1,0 +1,1 @@
+This store the game state! Do not alter. This counts as hacking the infrastructure.
