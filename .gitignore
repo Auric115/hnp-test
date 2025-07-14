@@ -5,7 +5,6 @@
 
 # Local user/game state
 .hnp_config
-hnp_global.json
 
 # Python artifacts
 __pycache__/

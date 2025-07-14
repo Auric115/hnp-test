@@ -18,7 +18,7 @@ python game.py
 
 ## How to Start Playing
 
-1. Make sure you have the latest Python 3, Git, and Docker installed.
+1. Make sure you have the latest Python 3, Git, and Docker installed and a UNIX-like environment like a Linux VM, macOS, WSL or Git Bash
 2. Fork this repository into your own GitHub account.
 3. Invite your opponent's GitHub account to the fork as a collaborator.
 4. Run `python game.py --start` and submit the flag.

@@ -28,6 +28,29 @@ def write_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
+def docker_image_exists(image_name):
+    """Check if a docker image exists locally"""
+    result = subprocess.run(
+        ["docker", "images", "-q", image_name],
+        capture_output=True,
+        text=True,
+    )
+    return bool(result.stdout.strip())
+
+def build_docker_image():
+    print("[BUILD] Docker image 'hnp-service' not found locally. Building now...")
+    result = subprocess.run(["./utils/build.sh"])
+    if result.returncode != 0:
+        print("[ERROR] Failed to build Docker image. Aborting.")
+        sys.exit(1)
+    print("[BUILD] Docker image built successfully.")
+
+def run_service():
+    if not docker_image_exists("hnp-service"):
+        build_docker_image()
+    print("[RUN] Starting service...")
+    subprocess.run(["./utils/run.sh"])
+
 # -------------------- CONFIG INIT --------------------
 def init_config():
     if CONFIG_FILE.exists():
@@ -62,34 +85,43 @@ def init_config():
 def start_challenge(test_mode=False):
     if test_mode:
         print("[TEST] Running in test mode. Starting service without saving state.")
-        subprocess.run(["./utils/run.sh"])
+        run_service()
         return
+
+    run_service()
 
     config = read_json(CONFIG_FILE)
     config["hack_start"] = now()
     write_json(CONFIG_FILE, config)
     print("[START] Hack time started at", config["hack_start"])
-    subprocess.run(["./utils/run.sh"])
 
 # -------------------- SUBMIT FLAG --------------------
 def submit_flag(submitted_flag):
     config = read_json(CONFIG_FILE)
     global_data = read_json(GLOBAL_STATE_FILE)
-    username = config["username"]
+    username = config.get("username")
+
+    if not username:
+        print("[ERROR] Username not found in config. Run --start first.")
+        return
 
     if not submitted_flag.startswith(FLAG_FORMAT):
         print("[ERROR] Invalid flag format.")
         return
 
+    if not config.get("hack_start"):
+        print("[ERROR] Hack start time not found. Run --start first.")
+        return
+
     start = datetime.fromisoformat(config["hack_start"])
-    end = datetime.utcnow()
+    end = datetime.now(timezone.utc)
     hack_time = int((end - start).total_seconds())
 
     print(f"[INFO] Hack duration: {hack_time} seconds")
 
     # Find opponent (the other user who last pushed)
     opponent = None
-    for user in global_data["players"]:
+    for user in global_data.get("players", {}):
         if user != username:
             opponent = user
             break
@@ -99,7 +131,7 @@ def submit_flag(submitted_flag):
         return
 
     # Assume success for now
-    global_data["players"][opponent]["dev_time"] += hack_time
+    global_data["players"][opponent]["dev_time"] = global_data["players"][opponent].get("dev_time", 0) + hack_time
     write_json(GLOBAL_STATE_FILE, global_data)
     print(f"[SUCCESS] Flag accepted. {opponent}'s dev time increased by {hack_time}s.")
     print(f"[NEXT] Run: python game.py --patch")
@@ -107,8 +139,18 @@ def submit_flag(submitted_flag):
 # -------------------- PATCH BRANCH --------------------
 def patch():
     config = read_json(CONFIG_FILE)
-    branch_name = f"patch-{config['username']}-{int(time.time())}"
-    subprocess.run(["git", "checkout", "-b", branch_name])
+    username = config.get("username")
+    if not username:
+        print("[ERROR] Username not found in config. Run --start first.")
+        return
+
+    branch_name = f"patch-{username}-{int(time.time())}"
+    print(f"[GIT] Creating branch {branch_name}...")
+    result = subprocess.run(["git", "checkout", "-b", branch_name])
+    if result.returncode != 0:
+        print("[ERROR] Failed to create git branch. Make sure you are in a git repo.")
+        return
+
     config["patch_start"] = now()
     config["current_branch"] = branch_name
     write_json(CONFIG_FILE, config)
@@ -118,12 +160,20 @@ def patch():
 def end_patch(new_flag):
     config = read_json(CONFIG_FILE)
     global_data = read_json(GLOBAL_STATE_FILE)
-    username = config["username"]
+    username = config.get("username")
+
+    if not username:
+        print("[ERROR] Username not found in config. Run --start first.")
+        return
+
+    if not config.get("patch_start"):
+        print("[ERROR] Patch start time not found. Run --patch first.")
+        return
 
     start = datetime.fromisoformat(config["patch_start"])
     end = datetime.now(timezone.utc)
     patch_time = int((end - start).total_seconds())
-    allowed_time = global_data["players"][username].get("dev_time", DEFAULT_DEV_TIME)
+    allowed_time = global_data.get("players", {}).get(username, {}).get("dev_time", DEFAULT_DEV_TIME)
 
     print(f"[END] Allowed dev time: {allowed_time}s")
     print(f"[END] Actual dev time: {patch_time}s")
@@ -135,6 +185,7 @@ def end_patch(new_flag):
             subprocess.run(["git", "reset", "--hard", "origin/main"])
             return
 
+    print("[GIT] Merging branch and pushing changes...")
     subprocess.run(["git", "checkout", "main"])
     subprocess.run(["git", "merge", config["current_branch"]])
     subprocess.run(["git", "push", "origin", "main"])
