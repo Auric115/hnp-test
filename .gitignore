@@ -1,10 +1,11 @@
 # if files ignored by the gitignore are needed,
 # generate the files with build.sh rather than altering the gitignore
 
-# if files need to be ignores, add them to the gitignore
+# if files need to be ignored, add them to the gitignore
 
 # local user game state
 state/.hnp_config
+state/.hnp_service_container_id
 
 # Python artifacts
 __pycache__/
