@@ -1,0 +1,45 @@
+# if files ignored by the gitignore are needed,
+# generate the files with build.sh rather than altering the gitignore
+
+# if files need to be ignores, add them to the gitignore
+
+# Local user/game state
+.hnp_config
+hnp_global.json
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Docker
+*.tar
+*.img
+*.bak
+*.pid
+*.sock
+
+# VSCode and editor configs
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS/system files
+.DS_Store
+Thumbs.db
+
+# Service logs or generated files
+*.db
+*.sqlite
+*.log
+
+# Ignore local containers or dev volumes
+container_data/

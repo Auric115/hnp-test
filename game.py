@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 CONFIG_FILE = Path(".hnp_config")
@@ -16,7 +16,7 @@ FLAG_FORMAT = "HNP{"
 
 # -------------------- UTILS --------------------
 def now():
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 def read_json(path):
     if not path.exists():
@@ -59,12 +59,17 @@ def init_config():
         print("[INIT] Global player state initialized.")
 
 # -------------------- HACK START --------------------
-def start_challenge():
+def start_challenge(test_mode=False):
+    if test_mode:
+        print("[TEST] Running in test mode. Starting service without saving state.")
+        subprocess.run(["./utils/run.sh"])
+        return
+
     config = read_json(CONFIG_FILE)
     config["hack_start"] = now()
     write_json(CONFIG_FILE, config)
     print("[START] Hack time started at", config["hack_start"])
-    subprocess.run(["./run.sh"])
+    subprocess.run(["./utils/run.sh"])
 
 # -------------------- SUBMIT FLAG --------------------
 def submit_flag(submitted_flag):
@@ -116,7 +121,7 @@ def end_patch(new_flag):
     username = config["username"]
 
     start = datetime.fromisoformat(config["patch_start"])
-    end = datetime.utcnow()
+    end = datetime.now(timezone.utc)
     patch_time = int((end - start).total_seconds())
     allowed_time = global_data["players"][username].get("dev_time", DEFAULT_DEV_TIME)
 
@@ -149,10 +154,13 @@ def main():
     parser.add_argument("--submit", type=str, help="Submit a flag")
     parser.add_argument("--patch", action="store_true", help="Begin patching")
     parser.add_argument("--end", type=str, help="End patch and provide new flag")
+    parser.add_argument("--test", action="store_true", help="Run service in test mode")
 
     args = parser.parse_args()
 
-    if args.start:
+    if args.test:
+        start_challenge(test_mode=True)
+    elif args.start:
         init_config()
         start_challenge()
     elif args.submit:
